@@ -337,7 +337,7 @@ class SqlBlobStore implements BlobStore {
 		$errors = [];
 		foreach ( $blobAddresses as $blobAddress ) {
 			try {
-				[ $schema, $id ] = self::splitBlobAddress( $blobAddress );
+				[ $schema, $id, $params ] = self::splitBlobAddress( $blobAddress );
 			} catch ( InvalidArgumentException $ex ) {
 				throw new BlobAccessException(
 					$ex->getMessage() . '. Use findBadBlobs.php to remedy.',
@@ -346,8 +346,20 @@ class SqlBlobStore implements BlobStore {
 				);
 			}
 
-			// TODO: MCR: also support 'ex' schema with ExternalStore URLs, plus flags encoded in the URL!
-			if ( $schema === 'bad' ) {
+			if ( $schema === 'es' ) {
+				if ( $params && isset( $params['flags'] ) ) {
+					$blob = $this->expandBlob( $id, $params['flags'] . ',external', $blobAddress );
+				} else {
+					$blob = $this->expandBlob( $id, 'external', $blobAddress );
+				}
+				if ( $blob === false ) {
+					$errors[$blobAddress] = [
+						'internalerror',
+						"Bad data in external store address $id. Use findBadBlobs.php to remedy."
+					];
+				}
+				$result[$blobAddress] = $blob;
+			} elseif ( $schema === 'bad' ) {
 				// Database row was marked as "known bad"
 				wfDebug(
 					__METHOD__
