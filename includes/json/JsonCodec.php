@@ -109,6 +109,11 @@ class JsonCodec implements JsonUnserializer, JsonSerializer {
 	private function serializeOne( &$value ) {
 		if ( $value instanceof JsonSerializable ) {
 			$value = $value->jsonSerialize();
+			if ( !is_array( $value ) ) {
+				// Although JsonSerializable doesn't /require/ the result to be
+				// an array, JsonCodec and JsonUnserializableTrait do.
+				throw new JsonException( "jsonSerialize didn't return array" );
+			}
 			$value[JsonConstants::COMPLEX_ANNOTATION] = true;
 			// The returned array may still have instance of JsonSerializable,
 			// stdClass, or array, so fall through to recursively handle these.
@@ -135,9 +140,10 @@ class JsonCodec implements JsonUnserializer, JsonSerializer {
 				$value[JsonConstants::COMPLEX_ANNOTATION] = true;
 			}
 		} elseif ( !is_scalar( $value ) && $value !== null ) {
-				throw new JsonException(
-					'Unable to serialize JSON.'
-				);
+			$details = is_object( $value ) ? get_class( $value ) : gettype( $value );
+			throw new JsonException(
+				'Unable to serialize JSON: ' . $details
+			);
 		}
 		return $value;
 	}
@@ -147,7 +153,7 @@ class JsonCodec implements JsonUnserializer, JsonSerializer {
 		// to json.
 		// TODO: make detectNonSerializableData not choke on cyclic structures.
 		$unserializablePath = $this->detectNonSerializableDataInternal(
-			$value, false, '$'
+			$value, false, '$', false
 		);
 		if ( $unserializablePath ) {
 			throw new JsonException(
@@ -160,8 +166,16 @@ class JsonCodec implements JsonUnserializer, JsonSerializer {
 		// Format as JSON
 		$json = FormatJson::encode( $value, false, FormatJson::ALL_OK );
 		if ( !$json ) {
+			try {
+				// Try to collect more information on the failure.
+				$details = $this->detectNonSerializableData( $value );
+			} catch ( \Throwable $t ) {
+				$details = $t->getMessage();
+			}
 			throw new JsonException(
-				'Failed to encode JSON. Error ' . json_last_error_msg()
+				'Failed to encode JSON. ' .
+				'Error: ' . json_last_error_msg() . '. ' .
+				'Details: ' . $details
 			);
 		}
 
@@ -206,12 +220,15 @@ class JsonCodec implements JsonUnserializer, JsonSerializer {
 	 * @param mixed $value
 	 * @param bool $expectUnserialize
 	 * @param string $accumulatedPath
+	 * @param bool $exhaustive Whether to (slowly) completely traverse the
+	 *  $value in order to find the precise location of a problem
 	 * @return string|null JSON path to first encountered non-serializable property or null.
 	 */
 	private function detectNonSerializableDataInternal(
 		$value,
 		bool $expectUnserialize,
-		string $accumulatedPath
+		string $accumulatedPath,
+		bool $exhaustive = false
 	): ?string {
 		if (
 			$this->canMakeNewFromValue( $value ) ||
@@ -220,30 +237,47 @@ class JsonCodec implements JsonUnserializer, JsonSerializer {
 			// Contains a conflicting use of JsonConstants::TYPE_ANNOTATION or
 			// JsonConstants::COMPLEX_ANNOTATION; in the future we might use
 			// an alternative encoding for these objects to allow them.
-			return $accumulatedPath;
+			return $accumulatedPath . ': conflicting use of protected property';
 		}
-		if ( is_array( $value ) || (
-			is_object( $value ) && get_class( $value ) === stdClass::class
-		) ) {
-			foreach ( $value as $key => &$propValue ) {
+		if ( is_object( $value ) ) {
+			if ( get_class( $value ) === stdClass::class ) {
+				$value = (array)$value;
+			} elseif (
+				$expectUnserialize ?
+				$value instanceof JsonUnserializable :
+				$value instanceof JsonSerializable
+			) {
+				if ( $exhaustive ) {
+					// Call the appropriate serialization method and recurse to
+					// ensure contents are also serializable.
+					$value = $value->jsonSerialize();
+					if ( !is_array( $value ) ) {
+						return $accumulatedPath . ": jsonSerialize didn't return array";
+					}
+				} else {
+					// Assume that serializable objects contain 100%
+					// serializable contents in their representation.
+					return null;
+				}
+			} else {
+				// Instances of classes other the \stdClass or JsonSerializable can not be serialized to JSON.
+				return $accumulatedPath . ': ' . get_class( $value );
+			}
+		}
+		if ( is_array( $value ) ) {
+			foreach ( $value as $key => $propValue ) {
 				$propValueNonSerializablePath = $this->detectNonSerializableDataInternal(
 					$propValue,
 					$expectUnserialize,
-					$accumulatedPath . '.' . $key
+					$accumulatedPath . '.' . $key,
+					$exhaustive
 				);
-				if ( $propValueNonSerializablePath ) {
+				if ( $propValueNonSerializablePath !== null ) {
 					return $propValueNonSerializablePath;
 				}
 			}
-		} elseif (
-			( $expectUnserialize && $value instanceof JsonUnserializable )
-			// Trust that JsonSerializable will correctly serialize.
-			|| ( !$expectUnserialize && $value instanceof JsonSerializable )
-		) {
-			return null;
-			// Instances of classes other the \stdClass or JsonSerializable can not be serialized to JSON.
 		} elseif ( !is_scalar( $value ) && $value !== null ) {
-			return $accumulatedPath;
+			return $accumulatedPath . ': nonscalar ' . gettype( $value );
 		}
 		return null;
 	}
@@ -259,6 +293,6 @@ class JsonCodec implements JsonUnserializer, JsonSerializer {
 	 * @since 1.36
 	 */
 	public function detectNonSerializableData( $value, bool $expectUnserialize = false ): ?string {
-		return $this->detectNonSerializableDataInternal( $value, $expectUnserialize, '$' );
+		return $this->detectNonSerializableDataInternal( $value, $expectUnserialize, '$', true );
 	}
 }
