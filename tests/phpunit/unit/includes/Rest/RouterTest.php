@@ -4,11 +4,13 @@ namespace MediaWiki\Tests\Rest;
 
 use GuzzleHttp\Psr7\Uri;
 use HashBagOStuff;
+use Liuggio\StatsdClient\Factory\StatsdDataFactoryInterface;
 use MediaWiki\Config\ServiceOptions;
 use MediaWiki\MainConfigNames;
 use MediaWiki\Rest\BasicAccess\StaticBasicAuthorizer;
 use MediaWiki\Rest\CorsUtils;
 use MediaWiki\Rest\Handler;
+use MediaWiki\Rest\HttpException;
 use MediaWiki\Rest\Reporter\ErrorReporter;
 use MediaWiki\Rest\RequestData;
 use MediaWiki\Rest\RequestInterface;
@@ -72,6 +74,12 @@ class RouterTest extends MediaWikiUnitTestCase {
 		] );
 	}
 
+	private function createMockStats( string $method, ...$with ): StatsdDataFactoryInterface {
+		$stats = $this->createNoOpMock( StatsdDataFactoryInterface::class, [ $method ] );
+		$stats->expects( $this->atLeastOnce() )->method( $method )->with( ...$with );
+		return $stats;
+	}
+
 	public function testPrefixMismatch() {
 		$request = new RequestData( [ 'uri' => new Uri( '/bogus' ) ] );
 		$router = $this->createRouter( $request );
@@ -130,8 +138,14 @@ class RouterTest extends MediaWikiUnitTestCase {
 	public function testHttpException() {
 		$request = new RequestData( [ 'uri' => new Uri( '/rest/mock/v1/RouterTest/throw' ) ] );
 		$router = $this->createRouter( $request );
+
+		$router->setStats( $this->createMockStats(
+			'increment',
+			'rest_api_errors._mock_v1_RouterTest_throw.GET.555'
+		) );
+
 		$response = $router->execute( $request );
-		$this->assertSame( 555, $response->getStatusCode() );
+		$this->assertSame( 555, $response->getStatusCode(), (string)$response->getBody() );
 		$body = $response->getBody();
 		$body->rewind();
 		$data = json_decode( $body->getContents(), true );
@@ -142,7 +156,7 @@ class RouterTest extends MediaWikiUnitTestCase {
 		$request = new RequestData( [ 'uri' => new Uri( '/rest/mock/v1/RouterTest/fatal' ) ] );
 		$router = $this->createRouter( $request );
 		$response = $router->execute( $request );
-		$this->assertSame( 500, $response->getStatusCode() );
+		$this->assertSame( 500, $response->getStatusCode(), (string)$response->getBody() );
 		$body = $response->getBody();
 		$body->rewind();
 		$data = json_decode( $body->getContents(), true );
@@ -154,8 +168,15 @@ class RouterTest extends MediaWikiUnitTestCase {
 	public function testRedirectException() {
 		$request = new RequestData( [ 'uri' => new Uri( '/rest/mock/v1/RouterTest/throwRedirect' ) ] );
 		$router = $this->createRouter( $request );
+
+		$router->setStats( $this->createMockStats(
+			'timing',
+			'rest_api_latency._mock_v1_RouterTest_throwRedirect.GET.301',
+			$this->greaterThan( 0 )
+		) );
+
 		$response = $router->execute( $request );
-		$this->assertSame( 301, $response->getStatusCode() );
+		$this->assertSame( 301, $response->getStatusCode(), (string)$response->getBody() );
 		$this->assertSame( 'http://example.com', $response->getHeaderLine( 'Location' ) );
 	}
 
@@ -164,15 +185,22 @@ class RouterTest extends MediaWikiUnitTestCase {
 		$request = new RequestData( [ 'uri' => new Uri( '/rest/mock/v1/RouterTest/redirect' ) ] );
 		$router = $this->createRouter( $request );
 		$response = $router->execute( $request );
-		$this->assertSame( 308, $response->getStatusCode() );
+		$this->assertSame( 308, $response->getStatusCode(), (string)$response->getBody() );
 		$this->assertSame( '/rest/mock/RouterTest/redirectTarget', $response->getHeaderLine( 'Location' ) );
 	}
 
 	public function testResponseException() {
 		$request = new RequestData( [ 'uri' => new Uri( '/rest/mock/v1/RouterTest/throwWrapped' ) ] );
 		$router = $this->createRouter( $request );
+
+		$router->setStats( $this->createMockStats(
+			'timing',
+			'rest_api_latency._mock_v1_RouterTest_throwWrapped.GET.200',
+			$this->greaterThan( 0 )
+		) );
+
 		$response = $router->execute( $request );
-		$this->assertSame( 200, $response->getStatusCode() );
+		$this->assertSame( 200, $response->getStatusCode(), (string)$response->getBody() );
 	}
 
 	public function testBasicAccess() {
