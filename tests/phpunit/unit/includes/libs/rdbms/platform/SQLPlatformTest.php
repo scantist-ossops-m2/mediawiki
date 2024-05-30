@@ -980,30 +980,30 @@ class SQLPlatformTest extends TestCase {
 	}
 
 	public static function provideMakeListWarning() {
-		yield 'associative keys in WHERE array value' => [
-			[ 'x' => [ 'a' => 1, 'b' => 2 ] ],
-			LIST_AND,
-			'Wikimedia\Rdbms\Platform\SQLPlatform::makeList: array key {key} in list of values ignored',
-			[ 'key' => 'a' ]
-		];
-		yield 'associative keys in WHERE array value (single)' => [
-			[ 'x' => [ 'b' => 1 ] ],
-			LIST_AND,
-			'Wikimedia\Rdbms\Platform\SQLPlatform::makeList: array key {key} in list of values ignored',
-			[ 'key' => 'b' ]
-		];
-		yield 'associative keys in comma list' => [
-			[ 'a' => 1, 'b' => 2 ],
-			LIST_COMMA,
-			'Wikimedia\Rdbms\Platform\SQLPlatform::makeList: array key {key} in list of values ignored',
-			[ 'key' => 'a' ]
-		];
-		yield 'associative keys in comma list (single)' => [
-			[ 'b' => 1 ],
-			LIST_COMMA,
-			'Wikimedia\Rdbms\Platform\SQLPlatform::makeList: array key {key} in list of values ignored',
-			[ 'key' => 'b' ]
-		];
+		// yield 'associative keys in WHERE array value' => [
+		// 	[ 'x' => [ 'a' => 1, 'b' => 2 ] ],
+		// 	LIST_AND,
+		// 	'Wikimedia\Rdbms\Platform\SQLPlatform::makeList: array key {key} in list of values ignored',
+		// 	[ 'key' => 'a' ]
+		// ];
+		// yield 'associative keys in WHERE array value (single)' => [
+		// 	[ 'x' => [ 'b' => 1 ] ],
+		// 	LIST_AND,
+		// 	'Wikimedia\Rdbms\Platform\SQLPlatform::makeList: array key {key} in list of values ignored',
+		// 	[ 'key' => 'b' ]
+		// ];
+		// yield 'associative keys in comma list' => [
+		// 	[ 'a' => 1, 'b' => 2 ],
+		// 	LIST_COMMA,
+		// 	'Wikimedia\Rdbms\Platform\SQLPlatform::makeList: array key {key} in list of values ignored',
+		// 	[ 'key' => 'a' ]
+		// ];
+		// yield 'associative keys in comma list (single)' => [
+		// 	[ 'b' => 1 ],
+		// 	LIST_COMMA,
+		// 	'Wikimedia\Rdbms\Platform\SQLPlatform::makeList: array key {key} in list of values ignored',
+		// 	[ 'key' => 'b' ]
+		// ];
 		yield 'associative keys in field list' => [
 			[ 'a' => 'x', 'b' => 'y' ],
 			LIST_NAMES,

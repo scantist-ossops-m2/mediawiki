@@ -282,7 +282,7 @@ class SQLPlatform implements ISQLPlatform {
 				} elseif ( $mode == self::LIST_SET ) {
 					$list .= "$field = ";
 				} elseif ( $mode === self::LIST_COMMA && !is_numeric( $field ) ) {
-					$keyWarning ??= [ __METHOD__ . ": array key {key} in list of values ignored", [ 'key' => $field ] ];
+					// Temporarily remove warning per T366268
 				} elseif ( $mode === self::LIST_NAMES && !is_numeric( $field ) ) {
 					$keyWarning ??= [ __METHOD__ . ": array key {key} in list of fields ignored", [ 'key' => $field ] ];
 				}
@@ -293,7 +293,7 @@ class SQLPlatform implements ISQLPlatform {
 				) {
 					$list .= "$field = ";
 				} elseif ( $mode === self::LIST_COMMA && !is_numeric( $field ) ) {
-					$keyWarning ??= [ __METHOD__ . ": array key {key} in list of values ignored", [ 'key' => $field ] ];
+					// Temporarily remove warning per T366268
 				} elseif ( $mode === self::LIST_NAMES && !is_numeric( $field ) ) {
 					$keyWarning ??= [ __METHOD__ . ": array key {key} in list of fields ignored", [ 'key' => $field ] ];
 				}
